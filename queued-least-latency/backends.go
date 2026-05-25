@@ -46,9 +46,10 @@ func (r *BackendRegistry) SetBackends(addrs []string) {
 	logrus.WithField("addrs", addrs).Info("backends updated")
 }
 
-// PickBest returns the address of the available backend with the lowest EWMA latency,
-// or "" if all backends are above the threshold or none are registered.
-// Never-tried backends are treated as latency 0 (tried first, optimistic).
+// PickBest returns the backend with the lowest EWMA latency that is under the
+// threshold. A backend above the threshold is still eligible if it has no
+// in-flight requests — there is no point holding the queue when the backend
+// is idle regardless of its historical latency.
 func (r *BackendRegistry) PickBest() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -60,9 +61,10 @@ func (r *BackendRegistry) PickBest() string {
 		var lat float64
 		if s.ewmaLatency == nil {
 			lat = 0
-		} else if *s.ewmaLatency < r.threshold {
+		} else if *s.ewmaLatency < r.threshold || s.inFlight == 0 {
 			lat = *s.ewmaLatency
 		} else {
+			// Above threshold and already busy — skip.
 			continue
 		}
 		if best == "" || lat < bestLatency {
