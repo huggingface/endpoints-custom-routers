@@ -60,7 +60,11 @@ func (r *BackendRegistry) PickBest() string {
 	for addr, s := range r.backends {
 		var lat float64
 		if s.ewmaLatency == nil {
-			lat = 0
+			if s.inFlight == 0 {
+				lat = 0 // untried and idle — prefer it for probing
+			} else {
+				lat = r.threshold // already being probed — treat as average cost
+			}
 		} else if *s.ewmaLatency < r.threshold || s.inFlight == 0 {
 			lat = *s.ewmaLatency
 		} else {
