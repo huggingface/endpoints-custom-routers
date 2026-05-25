@@ -4,7 +4,7 @@ A collection of load balancing routers for the kv-router experimental feature in
 
 ## How the kv-router feature works
 
-The kv-router is an Endpoints-specific feature. When enabled on an endpoint, a sidecar container is injected into the leader pod. Traffic flows like this:
+The kv-router is an Endpoints-specific feature. When enabled on an endpoint, a sidecar container is injected into the replicas. Traffic flows like this:
 
 ```
 External request
