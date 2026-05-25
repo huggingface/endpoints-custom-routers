@@ -1,10 +1,10 @@
 package main
 
 import (
-	"log/slog"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 type backendState struct {
@@ -18,14 +18,16 @@ type BackendRegistry struct {
 	backends  map[string]*backendState
 	mu        sync.Mutex
 	latency   *prometheus.GaugeVec
+	inFlight  *prometheus.GaugeVec
 }
 
-func newBackendRegistry(alpha, threshold float64, latency *prometheus.GaugeVec) *BackendRegistry {
+func newBackendRegistry(alpha, threshold float64, latency, inFlight *prometheus.GaugeVec) *BackendRegistry {
 	return &BackendRegistry{
 		alpha:     alpha,
 		threshold: threshold,
 		backends:  make(map[string]*backendState),
 		latency:   latency,
+		inFlight:  inFlight,
 	}
 }
 
@@ -41,7 +43,7 @@ func (r *BackendRegistry) SetBackends(addrs []string) {
 		}
 	}
 	r.backends = next
-	slog.Info("backends updated", "addrs", addrs)
+	logrus.WithField("addrs", addrs).Info("backends updated")
 }
 
 // PickBest returns the address of the available backend with the lowest EWMA latency,
@@ -71,6 +73,7 @@ func (r *BackendRegistry) PickBest() string {
 
 	if best != "" {
 		r.backends[best].inFlight++
+		r.inFlight.WithLabelValues(best).Inc()
 	}
 	return best
 }
@@ -84,6 +87,7 @@ func (r *BackendRegistry) RecordResult(addr string, duration float64) {
 	}
 	if s.inFlight > 0 {
 		s.inFlight--
+		r.inFlight.WithLabelValues(addr).Dec()
 	}
 	if s.ewmaLatency == nil {
 		s.ewmaLatency = &duration
@@ -92,7 +96,7 @@ func (r *BackendRegistry) RecordResult(addr string, duration float64) {
 		s.ewmaLatency = &v
 	}
 	r.latency.WithLabelValues(addr).Set(*s.ewmaLatency)
-	slog.Debug("ewma updated", "addr", addr, "ewma", *s.ewmaLatency)
+	logrus.WithFields(logrus.Fields{"addr": addr, "ewma_s": *s.ewmaLatency}).Debug("ewma updated")
 }
 
 func (r *BackendRegistry) Stats() []map[string]any {

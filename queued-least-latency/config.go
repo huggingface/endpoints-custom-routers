@@ -12,6 +12,7 @@ type config struct {
 	queueMaxSize     int
 	queueTimeout     time.Duration
 	ewmaAlpha        float64
+	stateLogInterval time.Duration
 }
 
 func loadConfig() *config {
@@ -21,6 +22,7 @@ func loadConfig() *config {
 		queueMaxSize:     envInt("KVROUTER_QUEUE_MAX_SIZE", 1000),
 		queueTimeout:     time.Duration(envFloat("KVROUTER_QUEUE_TIMEOUT", 1200)) * time.Second,
 		ewmaAlpha:        envFloat("KVROUTER_EWMA_ALPHA", 0.3),
+		stateLogInterval: time.Duration(envFloat("KVROUTER_STATE_LOG_INTERVAL", 30)) * time.Second,
 	}
 }
 

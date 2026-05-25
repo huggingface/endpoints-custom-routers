@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 )
 
 var hopByHop = map[string]bool{
@@ -36,11 +36,12 @@ type srv struct {
 }
 
 type appMetrics struct {
-	queueDepth  prometheus.Gauge
-	backendEWMA *prometheus.GaugeVec
-	dispatched  prometheus.Counter
-	evicted     prometheus.Counter
-	timedOut    prometheus.Counter
+	queueDepth      prometheus.Gauge
+	backendEWMA     *prometheus.GaugeVec
+	backendInFlight *prometheus.GaugeVec
+	dispatched      prometheus.Counter
+	evicted         prometheus.Counter
+	timedOut        prometheus.Counter
 }
 
 func newMetrics(reg prometheus.Registerer) *appMetrics {
@@ -52,6 +53,10 @@ func newMetrics(reg prometheus.Registerer) *appMetrics {
 		backendEWMA: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "kvrouter_backend_ewma_latency_seconds",
 			Help: "EWMA latency per backend",
+		}, []string{"addr"}),
+		backendInFlight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "kvrouter_backend_inflight_requests",
+			Help: "In-flight requests per backend",
 		}, []string{"addr"}),
 		dispatched: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "kvrouter_requests_dispatched_total",
@@ -66,7 +71,7 @@ func newMetrics(reg prometheus.Registerer) *appMetrics {
 			Help: "Requests dropped due to queue timeout (503)",
 		}),
 	}
-	reg.MustRegister(m.queueDepth, m.backendEWMA, m.dispatched, m.evicted, m.timedOut)
+	reg.MustRegister(m.queueDepth, m.backendEWMA, m.backendInFlight, m.dispatched, m.evicted, m.timedOut)
 	return m
 }
 
@@ -78,13 +83,14 @@ func main() {
 
 	s := &srv{
 		cfg:      cfg,
-		registry: newBackendRegistry(cfg.ewmaAlpha, cfg.latencyThreshold, m.backendEWMA),
+		registry: newBackendRegistry(cfg.ewmaAlpha, cfg.latencyThreshold, m.backendEWMA, m.backendInFlight),
 		queue:    newBoundedQueue(cfg.queueMaxSize, m.queueDepth),
 		client:   &http.Client{Timeout: 0}, // no timeout — backends handle their own
 		m:        m,
 	}
 
 	go s.dispatcher()
+	go s.periodicStateLog()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /_kvrouter/set-backends", s.handleSetBackends)
@@ -92,16 +98,18 @@ func main() {
 	mux.Handle("GET /_kvrouter/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 	mux.HandleFunc("/", s.handleProxy)
 
+	logrus.SetLevel(logrus.InfoLevel)
+
 	addr := fmt.Sprintf(":%d", cfg.port)
-	slog.Info("kvrouter started",
-		"port", cfg.port,
-		"threshold_s", cfg.latencyThreshold,
-		"queue_max", cfg.queueMaxSize,
-		"timeout_s", cfg.queueTimeout.Seconds(),
-		"ewma_alpha", cfg.ewmaAlpha,
-	)
+	logrus.WithFields(logrus.Fields{
+		"port":        cfg.port,
+		"threshold_s": cfg.latencyThreshold,
+		"queue_max":   cfg.queueMaxSize,
+		"timeout_s":   cfg.queueTimeout.Seconds(),
+		"ewma_alpha":  cfg.ewmaAlpha,
+	}).Info("kvrouter started")
 	if err := http.ListenAndServe(addr, mux); err != nil {
-		slog.Error("server error", "error", err)
+		logrus.WithError(err).Fatal("server error")
 		os.Exit(1)
 	}
 }
@@ -153,6 +161,13 @@ func (s *srv) handleProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"backend":       backend,
+		"method":        r.Method,
+		"path":          r.URL.Path,
+		"queue_wait_ms": time.Since(item.enqueuedAt).Milliseconds(),
+	}).Info("dispatching request")
+
 	start := time.Now()
 	s.forward(w, r, backend, body)
 	s.registry.RecordResult(backend, time.Since(start).Seconds())
@@ -170,7 +185,7 @@ func (s *srv) forward(w http.ResponseWriter, r *http.Request, backend string, bo
 	resp, err := s.client.Do(req)
 	if err != nil {
 		http.Error(w, "bad gateway", http.StatusBadGateway)
-		slog.Error("forward error", "backend", backend, "error", err)
+		logrus.WithFields(logrus.Fields{"backend": backend}).WithError(err).Error("forward error")
 		return
 	}
 	defer resp.Body.Close()
@@ -195,7 +210,7 @@ func (s *srv) forward(w http.ResponseWriter, r *http.Request, backend string, bo
 			break
 		}
 		if readErr != nil {
-			slog.Error("stream read error", "backend", backend, "error", readErr)
+			logrus.WithFields(logrus.Fields{"backend": backend}).WithError(readErr).Error("stream read error")
 			return
 		}
 	}
@@ -221,6 +236,21 @@ func (s *srv) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"queue_depth": s.queue.len(),
 		"backends":    s.registry.Stats(),
 	})
+}
+
+func (s *srv) periodicStateLog() {
+	ticker := time.NewTicker(s.cfg.stateLogInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		for _, b := range s.registry.Stats() {
+			logrus.WithFields(logrus.Fields{
+				"addr":        b["addr"],
+				"ewma_s":      b["ewma_latency"],
+				"in_flight":   b["in_flight"],
+				"queue_depth": s.queue.len(),
+			}).Info("backend state")
+		}
+	}
 }
 
 func copyHeaders(dst, src http.Header) {
