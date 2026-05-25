@@ -174,7 +174,7 @@ func (s *srv) handleProxy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *srv) forward(w http.ResponseWriter, r *http.Request, backend string, body []byte) {
-	url := "http://" + backend + r.URL.RequestURI()
+	url := backend + r.URL.RequestURI()
 	req, err := http.NewRequestWithContext(r.Context(), r.Method, url, bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "bad gateway", http.StatusBadGateway)
