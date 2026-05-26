@@ -10,24 +10,27 @@ import (
 type backendState struct {
 	ewmaLatency *float64 // nil = never tried; treated as available (optimistic)
 	inFlight    int
+	completed   int
 }
 
 type BackendRegistry struct {
-	alpha     float64
-	threshold float64
-	backends  map[string]*backendState
-	mu        sync.Mutex
-	latency   *prometheus.GaugeVec
-	inFlight  *prometheus.GaugeVec
+	alpha        float64
+	threshold    float64
+	maxCompleted int // caps the ramp-up counter; 5*maxCompleted = 2*queueMaxSize
+	backends     map[string]*backendState
+	mu           sync.Mutex
+	latency      *prometheus.GaugeVec
+	inFlight     *prometheus.GaugeVec
 }
 
-func newBackendRegistry(alpha, threshold float64, latency, inFlight *prometheus.GaugeVec) *BackendRegistry {
+func newBackendRegistry(alpha, threshold float64, queueMaxSize int, latency, inFlight *prometheus.GaugeVec) *BackendRegistry {
 	return &BackendRegistry{
-		alpha:     alpha,
-		threshold: threshold,
-		backends:  make(map[string]*backendState),
-		latency:   latency,
-		inFlight:  inFlight,
+		alpha:        alpha,
+		threshold:    threshold,
+		maxCompleted: 2 * queueMaxSize / 5,
+		backends:     make(map[string]*backendState),
+		latency:      latency,
+		inFlight:     inFlight,
 	}
 }
 
@@ -65,11 +68,12 @@ func (r *BackendRegistry) PickBest() string {
 			} else {
 				continue // already being probed — wait for result before sending more
 			}
-		} else if *s.ewmaLatency < r.threshold || s.inFlight == 0 {
-			lat = *s.ewmaLatency
+		} else if s.inFlight == 0 {
+			lat = *s.ewmaLatency // idle — always use regardless of threshold
+		} else if *s.ewmaLatency >= r.threshold || s.inFlight >= 5*s.completed {
+			continue // above threshold or ramp-up cap not yet reached
 		} else {
-			// Above threshold and already busy — skip.
-			continue
+			lat = *s.ewmaLatency
 		}
 		if best == "" || lat < bestLatency {
 			best = addr
@@ -94,6 +98,9 @@ func (r *BackendRegistry) RecordResult(addr string, duration float64) {
 	if s.inFlight > 0 {
 		s.inFlight--
 		r.inFlight.WithLabelValues(addr).Dec()
+	}
+	if s.completed < r.maxCompleted {
+		s.completed++
 	}
 	if s.ewmaLatency == nil {
 		s.ewmaLatency = &duration

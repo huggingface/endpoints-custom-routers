@@ -84,7 +84,7 @@ func main() {
 
 	s := &srv{
 		cfg:      cfg,
-		registry: newBackendRegistry(cfg.ewmaAlpha, cfg.latencyThreshold, m.backendEWMA, m.backendInFlight),
+		registry: newBackendRegistry(cfg.ewmaAlpha, cfg.latencyThreshold, cfg.queueMaxSize, m.backendEWMA, m.backendInFlight),
 		queue:    newBoundedQueue(cfg.queueMaxSize, m.queueDepth),
 		client:   &http.Client{Timeout: 0}, // no timeout — backends handle their own
 		m:        m,
