@@ -7,6 +7,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const rampUpFactor = 5
+
 type backendState struct {
 	ewmaLatency *float64 // nil = never tried; treated as available (optimistic)
 	inFlight    int
@@ -27,7 +29,7 @@ func newBackendRegistry(alpha, threshold float64, queueMaxSize int, latency, inF
 	return &BackendRegistry{
 		alpha:        alpha,
 		threshold:    threshold,
-		maxCompleted: 2 * queueMaxSize / 5,
+		maxCompleted: 2 * queueMaxSize / rampUpFactor,
 		backends:     make(map[string]*backendState),
 		latency:      latency,
 		inFlight:     inFlight,
@@ -70,7 +72,7 @@ func (r *BackendRegistry) PickBest() string {
 			}
 		} else if s.inFlight == 0 {
 			lat = *s.ewmaLatency // idle — always use regardless of threshold
-		} else if *s.ewmaLatency >= r.threshold || s.inFlight >= 5*s.completed {
+		} else if *s.ewmaLatency >= r.threshold || s.inFlight >= rampUpFactor*s.completed {
 			continue // above threshold or ramp-up cap not yet reached
 		} else {
 			lat = *s.ewmaLatency
