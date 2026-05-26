@@ -20,7 +20,7 @@ The proxy calls `POST /_kvrouter/set-backends` whenever the replica set changes 
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/_kvrouter/set-backends` | Receive current backend pod IPs: `{"backends": ["host:port", ...]}` |
+| `POST` | `/_kvrouter/set-backends` | Receive current backend pod IPs: `{"backends": ["scheme://host:port", ...]}` |
 | `GET` | `/_kvrouter/health` | Readiness probe |
 
 ## Strategies
