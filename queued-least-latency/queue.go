@@ -16,14 +16,11 @@ type boundedQueue struct {
 	items   []*queueItem
 	maxSize int
 	mu      sync.Mutex
-	cond    *sync.Cond
 	depth   prometheus.Gauge
 }
 
 func newBoundedQueue(maxSize int, depth prometheus.Gauge) *boundedQueue {
-	q := &boundedQueue{maxSize: maxSize, depth: depth}
-	q.cond = sync.NewCond(&q.mu)
-	return q
+	return &boundedQueue{maxSize: maxSize, depth: depth}
 }
 
 // push enqueues item. If the queue is at capacity the oldest item is evicted and returned;
@@ -38,17 +35,23 @@ func (q *boundedQueue) push(item *queueItem) (evicted *queueItem) {
 	}
 	q.items = append(q.items, item)
 	q.depth.Inc()
-	q.cond.Signal()
 	return
 }
 
-// pop blocks until an item is available, then returns the oldest item.
+// peek returns the oldest item without removing it, or nil if empty.
+func (q *boundedQueue) peek() *queueItem {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.items) == 0 {
+		return nil
+	}
+	return q.items[0]
+}
+
+// pop removes and returns the oldest item. Caller must ensure the queue is non-empty.
 func (q *boundedQueue) pop() *queueItem {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	for len(q.items) == 0 {
-		q.cond.Wait()
-	}
 	item := q.items[0]
 	q.items = q.items[1:]
 	q.depth.Dec()

@@ -33,6 +33,7 @@ type srv struct {
 	queue    *boundedQueue
 	client   *http.Client
 	m        *appMetrics
+	wake     chan struct{}
 }
 
 type appMetrics struct {
@@ -87,6 +88,7 @@ func main() {
 		queue:    newBoundedQueue(cfg.queueMaxSize, m.queueDepth),
 		client:   &http.Client{Timeout: 0}, // no timeout — backends handle their own
 		m:        m,
+		wake:     make(chan struct{}, 1),
 	}
 
 	go s.dispatcher()
@@ -114,26 +116,45 @@ func main() {
 	}
 }
 
-func (s *srv) dispatcher() {
-	for {
-		item := s.queue.pop()
-		go s.dispatch(item)
+func (s *srv) notify() {
+	select {
+	case s.wake <- struct{}{}:
+	default:
 	}
 }
 
-func (s *srv) dispatch(item *queueItem) {
+func (s *srv) dispatcher() {
+	var timeoutC <-chan time.Time
 	for {
-		if time.Since(item.enqueuedAt) > s.cfg.queueTimeout {
-			item.backendCh <- ""
-			s.m.timedOut.Inc()
-			return
+		select {
+		case <-s.wake:
+		case <-timeoutC:
 		}
-		if backend := s.registry.PickBest(); backend != "" {
-			item.backendCh <- backend
+		timeoutC = nil
+		for s.queue.len() > 0 {
+			front := s.queue.peek()
+			if time.Since(front.enqueuedAt) > s.cfg.queueTimeout {
+				s.queue.pop()
+				front.backendCh <- ""
+				s.m.timedOut.Inc()
+				continue
+			}
+			backend := s.registry.PickBest()
+			if backend == "" {
+				break
+			}
+			s.queue.pop()
+			front.backendCh <- backend
 			s.m.dispatched.Inc()
-			return
 		}
-		time.Sleep(50 * time.Millisecond)
+		// wake up when the oldest item times out, if any remain
+		if front := s.queue.peek(); front != nil {
+			remaining := s.cfg.queueTimeout - time.Since(front.enqueuedAt)
+			if remaining <= 0 {
+				remaining = 0
+			}
+			timeoutC = time.After(remaining)
+		}
 	}
 }
 
@@ -154,6 +175,7 @@ func (s *srv) handleProxy(w http.ResponseWriter, r *http.Request) {
 		evicted.backendCh <- ""
 		s.m.evicted.Inc()
 	}
+	s.notify()
 
 	backend := <-item.backendCh
 	if backend == "" {
@@ -171,6 +193,7 @@ func (s *srv) handleProxy(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	s.forward(w, r, backend, body)
 	s.registry.RecordResult(backend, time.Since(start).Seconds())
+	s.notify()
 }
 
 func (s *srv) forward(w http.ResponseWriter, r *http.Request, backend string, body []byte) {
@@ -225,6 +248,7 @@ func (s *srv) handleSetBackends(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.registry.SetBackends(payload.Backends)
+	s.notify()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }
@@ -242,12 +266,13 @@ func (s *srv) periodicStateLog() {
 	ticker := time.NewTicker(s.cfg.stateLogInterval)
 	defer ticker.Stop()
 	for range ticker.C {
+		queueDepth := s.queue.len()
 		for _, b := range s.registry.Stats() {
 			logrus.WithFields(logrus.Fields{
 				"addr":        b["addr"],
 				"ewma_s":      b["ewma_latency"],
 				"in_flight":   b["in_flight"],
-				"queue_depth": s.queue.len(),
+				"queue_depth": queueDepth,
 			}).Info("backend state")
 		}
 	}
