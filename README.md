@@ -51,6 +51,7 @@ Routes requests to the backend with the lowest observed latency, using a FIFO qu
 | `KVROUTER_QUEUE_MAX_SIZE` | `1000` | Maximum number of requests held in the queue |
 | `KVROUTER_QUEUE_TIMEOUT` | `1200` | Seconds a request may wait in the queue before being dropped |
 | `KVROUTER_EWMA_ALPHA` | `0.3` | EWMA smoothing factor (higher = more reactive to recent latency) |
+| `KVROUTER_STATE_LOG_INTERVAL` | `30` | Seconds between periodic backend-state log lines |
 
 **API:**
 
