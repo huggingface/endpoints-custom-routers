@@ -1,4 +1,4 @@
-IMAGE ?= kvrouter
+IMAGE ?= custom-router
 TAG   ?= latest
 
 DIR := queued-least-latency

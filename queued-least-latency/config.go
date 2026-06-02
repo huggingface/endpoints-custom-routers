@@ -17,12 +17,12 @@ type config struct {
 
 func loadConfig() *config {
 	return &config{
-		port:             envInt("KVROUTER_PORT", 3000),
-		latencyThreshold: envFloat("KVROUTER_LATENCY_THRESHOLD", 3.0),
-		queueMaxSize:     envInt("KVROUTER_QUEUE_MAX_SIZE", 1000),
-		queueTimeout:     time.Duration(envFloat("KVROUTER_QUEUE_TIMEOUT", 1200)) * time.Second,
-		ewmaAlpha:        envFloat("KVROUTER_EWMA_ALPHA", 0.3),
-		stateLogInterval: time.Duration(envFloat("KVROUTER_STATE_LOG_INTERVAL", 30)) * time.Second,
+		port:             envInt("CUSTOM_ROUTER_PORT", 3000),
+		latencyThreshold: envFloat("CUSTOM_ROUTER_LATENCY_THRESHOLD", 3.0),
+		queueMaxSize:     envInt("CUSTOM_ROUTER_QUEUE_MAX_SIZE", 1000),
+		queueTimeout:     time.Duration(envFloat("CUSTOM_ROUTER_QUEUE_TIMEOUT", 1200)) * time.Second,
+		ewmaAlpha:        envFloat("CUSTOM_ROUTER_EWMA_ALPHA", 0.3),
+		stateLogInterval: time.Duration(envFloat("CUSTOM_ROUTER_STATE_LOG_INTERVAL", 30)) * time.Second,
 	}
 }
 

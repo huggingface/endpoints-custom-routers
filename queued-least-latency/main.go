@@ -48,27 +48,27 @@ type appMetrics struct {
 func newMetrics(reg prometheus.Registerer) *appMetrics {
 	m := &appMetrics{
 		queueDepth: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "kvrouter_queue_depth",
+			Name: "custom_router_queue_depth",
 			Help: "Number of requests waiting in the queue",
 		}),
 		backendEWMA: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "kvrouter_backend_ewma_latency_seconds",
+			Name: "custom_router_backend_ewma_latency_seconds",
 			Help: "EWMA latency per backend",
 		}, []string{"addr"}),
 		backendInFlight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "kvrouter_backend_inflight_requests",
+			Name: "custom_router_backend_inflight_requests",
 			Help: "In-flight requests per backend",
 		}, []string{"addr"}),
 		dispatched: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "kvrouter_requests_dispatched_total",
+			Name: "custom_router_requests_dispatched_total",
 			Help: "Requests successfully dispatched to a backend",
 		}),
 		evicted: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "kvrouter_requests_evicted_total",
+			Name: "custom_router_requests_evicted_total",
 			Help: "Requests dropped due to full queue (503)",
 		}),
 		timedOut: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "kvrouter_requests_timeout_total",
+			Name: "custom_router_requests_timeout_total",
 			Help: "Requests dropped due to queue timeout (503)",
 		}),
 	}
@@ -95,9 +95,9 @@ func main() {
 	go s.periodicStateLog()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /_kvrouter/set-backends", s.handleSetBackends)
-	mux.HandleFunc("GET /_kvrouter/health", s.handleHealth)
-	mux.Handle("GET /_kvrouter/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+	mux.HandleFunc("POST /_custom_router/set-backends", s.handleSetBackends)
+	mux.HandleFunc("GET /_custom_router/health", s.handleHealth)
+	mux.Handle("GET /_custom_router/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 	mux.HandleFunc("/", s.handleProxy)
 
 	logrus.SetLevel(logrus.InfoLevel)
@@ -109,7 +109,7 @@ func main() {
 		"queue_max":   cfg.queueMaxSize,
 		"timeout_s":   cfg.queueTimeout.Seconds(),
 		"ewma_alpha":  cfg.ewmaAlpha,
-	}).Info("kvrouter started")
+	}).Info("custom-router started")
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		logrus.WithError(err).Fatal("server error")
 		os.Exit(1)
