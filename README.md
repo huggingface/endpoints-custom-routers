@@ -40,7 +40,7 @@ Routes requests to the backend with the lowest observed latency, using a FIFO qu
 **Backpressure:**
 
 - When the queue is full, the oldest waiting request is evicted (503).
-- When a request has waited longer than `KVROUTER_QUEUE_TIMEOUT`, it is dropped (503).
+- When a request has waited longer than `CUSTOM_ROUTER_QUEUE_TIMEOUT`, it is dropped (503).
 
 **Configuration (environment variables):**
 

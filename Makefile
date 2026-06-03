@@ -9,7 +9,7 @@ build:
 	docker build -t $(IMAGE):$(TAG) ./$(DIR)
 
 build-binary:
-	cd $(DIR) && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../kvrouter .
+	cd $(DIR) && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../custom-router .
 
 test:
 	cd $(DIR) && go test ./...
@@ -21,4 +21,4 @@ quality:
 	cd $(DIR) && go vet ./...
 
 clean:
-	rm -f kvrouter
+	rm -f custom-router

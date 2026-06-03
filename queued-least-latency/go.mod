@@ -1,4 +1,4 @@
-module github.com/huggingface/kv-routers/queued-least-latency
+module github.com/huggingface/endpoints-custom-routers/queued-least-latency
 
 go 1.22
 
