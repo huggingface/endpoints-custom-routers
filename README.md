@@ -23,6 +23,8 @@ The proxy calls `POST /_custom_router/set-backends` whenever the replica set cha
 | `POST` | `/_custom_router/set-backends` | Receive current backend pod IPs: `{"backends": ["host:port", ...]}` |
 | `GET` | `/_custom_router/health` | Readiness probe |
 
+On HF endpoints, by default the sidecar will be expected to listen on port **3000** (configurable through the the customRouter.port endpoint property, that must then match to the env var CUSTOM_ROUTER_PORT here).
+
 ## Strategies
 
 ### `queued-least-latency`
