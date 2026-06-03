@@ -1,4 +1,4 @@
-# kv-routers
+# endpoints-custom-routers
 
 A collection of load balancing routers for the `customRouter` feature in Hugging Face Inference Endpoints. Each subdirectory implements a distinct routing strategy as a standalone HTTP proxy.
 
