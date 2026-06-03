@@ -2,6 +2,8 @@
 
 A collection of load balancing routers for the `customRouter` feature in Hugging Face Inference Endpoints. Each subdirectory implements a distinct routing strategy as a standalone HTTP proxy.
 
+> **Documentation:** [Custom Router guide](https://huggingface.co/docs/inference-endpoints/guides/custom_router) on the Hugging Face docs.
+
 ## How the custom-router feature works
 
 The custom-router is an Endpoints-specific feature. When enabled on an endpoint, a sidecar container is injected into the replicas. Traffic flows like this:
