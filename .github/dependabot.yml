@@ -1,6 +1,5 @@
-# Actions are pinned to commit SHAs across the organisation; a pinned
-# SHA is only safe while something raises it, and that something is
-# Dependabot. Edit this file freely — nothing writes it again.
+# This repository's actions are pinned to commit SHAs. A pinned SHA is
+# only safe while something raises it.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
