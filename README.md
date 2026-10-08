@@ -75,6 +75,10 @@ Routes requests to the backend with the lowest observed latency, using a FIFO qu
 | `custom_router_requests_dispatched_total` | Counter | Requests successfully forwarded |
 | `custom_router_requests_evicted_total` | Counter | Requests dropped due to full queue |
 | `custom_router_requests_timeout_total` | Counter | Requests dropped due to queue timeout |
+| `custom_router_backend_inflight_requests` | Gauge | In-flight requests per backend (`addr` label) |
+| `custom_router_scaling_metric` | Gauge | Requests held by the router, queued or in flight |
+
+**Autoscaling:** `custom_router_scaling_metric` is the gauge Inference Endpoints scales on with the `customRouter` scaling measure. With `"measure": {"customRouter": N}`, the endpoint keeps about `N` requests per replica. Every request goes through the leader replica's router, so its value covers the whole endpoint.
 
 **Running with Docker:**
 

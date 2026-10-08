@@ -91,6 +91,8 @@ func main() {
 		wake:     make(chan struct{}, 1),
 	}
 
+	reg.MustRegister(newScalingMetric(s))
+
 	go s.dispatcher()
 	go s.periodicStateLog()
 
@@ -114,6 +116,18 @@ func main() {
 		logrus.WithError(err).Fatal("server error")
 		os.Exit(1)
 	}
+}
+
+// newScalingMetric is the gauge Inference Endpoints autoscale on with the `customRouter`
+// measure: requests held by the router, queued or in flight. The endpoint's traffic all
+// goes through the leader's router, so its value covers the whole endpoint.
+func newScalingMetric(s *srv) prometheus.GaugeFunc {
+	return prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "custom_router_scaling_metric",
+		Help: "Requests held by the router, queued or in flight",
+	}, func() float64 {
+		return float64(s.queue.len() + s.registry.InFlight())
+	})
 }
 
 func (s *srv) notify() {
