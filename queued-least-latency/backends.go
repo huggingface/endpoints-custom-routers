@@ -114,6 +114,17 @@ func (r *BackendRegistry) RecordResult(addr string, duration float64) {
 	logrus.WithFields(logrus.Fields{"addr": addr, "ewma_s": *s.ewmaLatency}).Debug("ewma updated")
 }
 
+// InFlight returns the requests forwarded to a backend and not yet answered.
+func (r *BackendRegistry) InFlight() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	total := 0
+	for _, s := range r.backends {
+		total += s.inFlight
+	}
+	return total
+}
+
 func (r *BackendRegistry) Stats() []map[string]any {
 	r.mu.Lock()
 	defer r.mu.Unlock()
